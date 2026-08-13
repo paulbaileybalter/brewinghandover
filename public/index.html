@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evening Brewing Handover — Balter Brewing</title>
+<meta name="description" content="Digital cellar handover sheet for brewery shift changeovers.">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Balter Brewing" class="brand-mark">
+      <div class="brand-text">
+        <span class="brand-title">Evening Brewing Handover</span>
+        <span class="brand-sub">Balter Brewing</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="syncStatus" class="sync-status" aria-live="polite"></span>
+      <a href="/logout" class="btn btn-ghost" title="Log out">Log out</a>
+      <button type="button" class="btn btn-ghost" id="clearBtn" title="Clear all fields">Clear sheet</button>
+      <button type="button" class="btn btn-primary" id="generateBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12l6 6L20 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Build handover email
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ FORM ============ -->
+<main class="sheet">
+
+  <!-- Meta row -->
+  <section class="card meta-card" data-accent="ink">
+    <div class="meta-grid">
+      <label class="field">
+        <span class="field-label">Date</span>
+        <input type="date" id="metaDate">
+      </label>
+      <label class="field">
+        <span class="field-label">Handed over by</span>
+        <input type="text" id="metaFrom" placeholder="Name">
+      </label>
+    </div>
+  </section>
+
+  <!-- Priorities -->
+  <section class="card" data-accent="orange">
+    <div class="card-head">
+      <span class="tab" data-color="orange">01</span>
+      <div>
+        <h2>Priorities for next shift</h2>
+        <p class="card-hint">The must-do list. Keep it short and specific.</p>
+      </div>
+    </div>
+    <div id="prioritiesList" class="stack-list"></div>
+    <button type="button" class="btn btn-add" id="addPriority">+ Add priority</button>
+  </section>
+
+  <!-- Comments -->
+  <section class="card" data-accent="purple">
+    <div class="card-head">
+      <span class="tab" data-color="purple">02</span>
+      <div>
+        <h2>Comments &amp; issues — last 24 hrs</h2>
+        <p class="card-hint">Anything the next shift needs context on.</p>
+      </div>
+    </div>
+    <textarea id="comments" rows="5" placeholder="e.g. Fuge &amp; CB/BT CIP'd with the 300 kit. 500 kit issue unresolved — cleaned regardless, flag if it recurs..."></textarea>
+  </section>
+
+  <!-- Brite Tank Status -->
+  <section class="card" data-accent="mint">
+    <div class="card-head">
+      <span class="tab" data-color="mint">03</span>
+      <div>
+        <h2>Brite tank status</h2>
+        <p class="card-hint">BBT 1–8</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="grid-table" id="bbtTable">
+        <thead>
+          <tr>
+            <th>Tank</th>
+            <th>CIP / SIP / AW</th>
+            <th>Date</th>
+            <th>Beer</th>
+            <th>Volume</th>
+            <th>kPa</th>
+            <th>V/V</th>
+            <th>Ready to pack</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Fermenter Status -->
+  <section class="card" data-accent="sky">
+    <div class="card-head">
+      <span class="tab" data-color="sky">04</span>
+      <div>
+        <h2>Fermenter status</h2>
+        <p class="card-hint">FV 1–60 · leave blank if empty / idle</p>
+      </div>
+    </div>
+    <div class="fv-grid" id="fvGrid"></div>
+  </section>
+
+  <!-- Yeast -->
+  <section class="card" data-accent="gold">
+    <div class="card-head">
+      <span class="tab" data-color="gold">05</span>
+      <div>
+        <h2>Yeast propagation &amp; lines</h2>
+      </div>
+    </div>
+    <div class="mini-grid" id="yeastGrid"></div>
+  </section>
+
+  <!-- Grain -->
+  <section class="card" data-accent="pale">
+    <div class="card-head">
+      <span class="tab" data-color="pale">06</span>
+      <div>
+        <h2>Brewhouse grain</h2>
+        <p class="card-hint">Select the SKU for each line, then confirm.</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="grid-table" id="grainTable">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>SKU</th>
+            <th>Milled</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Utilities -->
+  <section class="card" data-accent="ink">
+    <div class="card-head">
+      <span class="tab" data-color="ink">07</span>
+      <div>
+        <h2>Utilities</h2>
+      </div>
+    </div>
+
+    <h3 class="subhead">Glycol</h3>
+    <div class="mini-grid" id="glycolGrid"></div>
+
+    <h3 class="subhead">DAW</h3>
+    <div class="mini-grid" id="readingsGrid"></div>
+
+    <h3 class="subhead">CO2</h3>
+    <div class="mini-grid" id="co2Grid"></div>
+
+    <h3 class="subhead">6–10 TW</h3>
+    <div class="mini-grid" id="twGrid"></div>
+
+    <h3 class="subhead">Waste yeast</h3>
+    <div class="mini-grid" id="wasteGrid"></div>
+  </section>
+
+  <!-- Cleaning completed -->
+  <section class="card" data-accent="mint">
+    <div class="card-head">
+      <span class="tab" data-color="mint">08</span>
+      <div>
+        <h2>Cleaning completed</h2>
+        <p class="card-hint">List what's been cleaned and signed off this shift.</p>
+      </div>
+    </div>
+    <div id="cleaningList" class="stack-list"></div>
+    <button type="button" class="btn btn-add" id="addCleaning">+ Add cleaning task</button>
+  </section>
+
+</main>
+
+<footer class="page-footer">
+  <img src="assets/logo.svg" alt="" class="footer-mark">
+  <span>Balter Brewing — Evening Brewing Handover</span>
+</footer>
+
+<!-- ============ EMAIL PREVIEW MODAL ============ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Handover email preview">
+    <div class="modal-head">
+      <h2>Handover email — ready to paste</h2>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+    </div>
+    <p class="modal-hint">This preview is formatted like an email. Use <strong>Copy formatted email</strong>, then paste (Ctrl/Cmd+V) straight into Outlook, Gmail, etc. Formatting carries over.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" id="copyRichBtn">Copy formatted email</button>
+      <button type="button" class="btn btn-ghost" id="copyPlainBtn">Copy as plain text</button>
+      <button type="button" class="btn btn-ghost" id="downloadImgBtn">Download as image</button>
+      <span class="copy-status" id="copyStatus" aria-live="polite"></span>
+    </div>
+    <div class="modal-body">
+      <div id="emailPreview" class="email-preview"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

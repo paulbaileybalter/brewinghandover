@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "balter-evening-brewing-handover",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-01-01",
+
+  // Static site files (index.html, style.css, app.js, assets/) are served
+  // straight from here by env.ASSETS.fetch(request) once the Worker has
+  // confirmed the request carries a valid session cookie. This is the
+  // modern unified-Workers replacement for the old Pages `functions/`
+  // folder and for Workers Sites.
+  //
+  // run_worker_first is essential: without it, Cloudflare serves matching
+  // static files directly and never invokes the Worker at all, which
+  // would bypass the auth gate entirely for every static asset (including
+  // index.html itself).
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+
+  "observability": {
+    "enabled": true
+  }
+
+  // Secrets (SITE_PASSWORD, SESSION_SECRET, JSONBIN_BIN_ID, JSONBIN_API_KEY)
+  // are NOT defined here — they're set as encrypted Secrets in the
+  // Cloudflare dashboard (Worker → Settings → Variables and Secrets) or via
+  // `wrangler secret put <NAME>`, never committed to the repo.
+}
