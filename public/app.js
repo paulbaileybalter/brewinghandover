@@ -140,6 +140,12 @@
     });
   }
 
+  buildMiniGrid("greenBeerGrid", [
+    ["gbl70", "70 Cellar"],
+    ["gbl300", "300 Cellar"],
+    ["gbl500", "500 Cellar"],
+  ]);
+
   buildMiniGrid("yeastGrid", [
     ["ypp1", "YPP1", "CIP/SIP 26/07"],
     ["ypp2", "YPP2", "SIP 25/7"],
@@ -265,6 +271,7 @@
     };
 
     const keys = [
+      "gbl70", "gbl300", "gbl500",
       "ypp1", "ypp2", "yline300", "yline500",
       "glycolSupply", "glycolReturn",
       "pmMain", "doReading", "sensory", "rlu", "co2", "amReading", "pmEvening",
@@ -579,6 +586,10 @@
         <td style="padding:5px 0;font-family:'Courier New',monospace;font-size:13px;color:#14161A;font-weight:bold;">${esc(val) || "–"}</td>
       </tr>`;
 
+    const greenBeerRows = [
+      ["70 Cellar", s.gbl70], ["300 Cellar", s.gbl300], ["500 Cellar", s.gbl500],
+    ].map(([l, v]) => miniRow(l, v)).join("");
+
     const yeastRows = [
       ["YPP1", s.ypp1], ["YPP2", s.ypp2],
       ["Yeast line 300", s.yline300], ["Yeast line 500", s.yline500],
@@ -675,6 +686,9 @@
           : `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#8a8d94;">All fermenters empty / no status recorded.</div>`}
       </td></tr>
 
+      ${sectionTitle("Green Beer Lines", BRAND.purple)}
+      <tr><td><table role="presentation" cellpadding="0" cellspacing="0" width="100%">${greenBeerRows}</table></td></tr>
+
       ${sectionTitle("Yeast propagation & lines", BRAND.gold)}
       <tr><td><table role="presentation" cellpadding="0" cellspacing="0" width="100%">${yeastRows}</table></td></tr>
 
@@ -712,6 +726,9 @@
     lines.push(`FERMENTER STATUS (non-empty only)`);
     if (s.fv.length) s.fv.forEach((r) => lines.push(`  FV${r.n}: ${r.val}`));
     else lines.push("  (all empty / no status recorded)");
+    lines.push("");
+    lines.push(`GREEN BEER LINES`);
+    lines.push(`  70 Cellar: ${s.gbl70 || "–"}   300 Cellar: ${s.gbl300 || "–"}   500 Cellar: ${s.gbl500 || "–"}`);
     lines.push("");
     lines.push(`YEAST PROPAGATION & LINES`);
     lines.push(`  YPP1: ${s.ypp1 || "–"}   YPP2: ${s.ypp2 || "–"}`);

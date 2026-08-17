@@ -66,7 +66,11 @@ a file around.
 1. Sign up at [jsonbin.io](https://jsonbin.io) (free tier is plenty for this).
 2. Go to **API Keys** and copy your **X-Master-Key** — this is
    `JSONBIN_API_KEY`.
-3. Create a new bin with a starting value of `{}`. Copy its **Bin ID** from
+3. Create a new bin. JSONBin's editor won't accept a truly empty `{}` (it
+   errors with "Bin cannot be blank"), so give it a small placeholder
+   instead, e.g. `{"note": "handover sync bin"}` — the app will overwrite
+   this the first time anyone saves the sheet, so its contents don't
+   matter. Copy the bin's **Bin ID** from
    the bin's page — this is `JSONBIN_BIN_ID`.
 
 ### 2. Generate a session secret
