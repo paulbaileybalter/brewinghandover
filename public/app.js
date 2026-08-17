@@ -141,9 +141,9 @@
   }
 
   buildMiniGrid("greenBeerGrid", [
-    ["gbl70", "70 Cellar"],
-    ["gbl300", "300 Cellar"],
-    ["gbl500", "500 Cellar"],
+    ["gbl70", "70 Cellar", "CIP/SIP 26/07"],
+    ["gbl300", "300 Cellar", "CIP/SIP 21/07"],
+    ["gbl500", "500 Cellar", "CIP/SIP 31/07"],
   ]);
 
   buildMiniGrid("yeastGrid", [
@@ -686,7 +686,7 @@
           : `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#8a8d94;">All fermenters empty / no status recorded.</div>`}
       </td></tr>
 
-      ${sectionTitle("Green Beer Lines", BRAND.purple)}
+      ${sectionTitle("Green beer lines", BRAND.purple)}
       <tr><td><table role="presentation" cellpadding="0" cellspacing="0" width="100%">${greenBeerRows}</table></td></tr>
 
       ${sectionTitle("Yeast propagation & lines", BRAND.gold)}
