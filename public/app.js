@@ -488,12 +488,27 @@
   /* -----------------------------------------------------------
      9. Clear sheet
   ----------------------------------------------------------- */
+  const CLEAR_EXCLUDE_SELECTOR = "#bbtTable, #greenBeerGrid, #yeastGrid";
+
   document.getElementById("clearBtn").addEventListener("click", () => {
-    if (!confirm("Clear every field on this sheet? This clears it for everyone syncing to this site, and can't be undone.")) return;
-    document.querySelectorAll("input[type=text], textarea").forEach((el) => (el.value = ""));
-    document.querySelectorAll('input[type=date]:not(#metaDate)').forEach((el) => (el.value = ""));
-    document.querySelectorAll("select").forEach((el) => (el.selectedIndex = 0));
-    document.querySelectorAll('input[type=checkbox]').forEach((el) => (el.checked = false));
+    if (!confirm("Clear this sheet for the next shift? Brite Tank Status, Green beer lines, and Yeast propagation & lines are left as-is since they don't reset every shift. This clears it for everyone syncing to this site, and can't be undone.")) return;
+
+    document.querySelectorAll("input[type=text], textarea").forEach((el) => {
+      if (el.closest(CLEAR_EXCLUDE_SELECTOR)) return;
+      el.value = "";
+    });
+    document.querySelectorAll('input[type=date]:not(#metaDate)').forEach((el) => {
+      if (el.closest(CLEAR_EXCLUDE_SELECTOR)) return;
+      el.value = "";
+    });
+    document.querySelectorAll("select").forEach((el) => {
+      if (el.closest(CLEAR_EXCLUDE_SELECTOR)) return;
+      el.selectedIndex = 0;
+    });
+    document.querySelectorAll('input[type=checkbox]').forEach((el) => {
+      if (el.closest(CLEAR_EXCLUDE_SELECTOR)) return;
+      el.checked = false;
+    });
     metaDate.value = new Date().toISOString().slice(0, 10);
     priorityStack.reset();
     priorityStack.addRow();
