@@ -301,7 +301,71 @@
   const syncStatus = document.getElementById("syncStatus");
   let lastLocalEditAt = 0;      // last time the person typed/changed something
   let lastKnownUpdatedAt = 0;   // updatedAt of whatever state is currently on screen
-  let pendingPush = null;       // state we owe the server if the last push failed
+  let pendingPush = null;       // set (truthy) when the last push failed and still owes the server a retry
+  let baseline = null;          // last state this device and the server were confirmed to agree on
+
+  // This site has no day-switching UI (unlike Packaging/Logistics Handover) —
+  // it's a single continuously-synced record, so there's no "date changed"
+  // event to reset baseline on. baseline simply starts null (no confirmed
+  // agreement yet) and gets (re)established after every successful pull or
+  // push — see setBaseline() below.
+
+  // Every top-level content key collectState() returns, except `updatedAt`
+  // (pure bookkeeping, handled separately). Unlike the sibling sites, this
+  // record isn't grouped into a handful of named sections — each of these
+  // already corresponds to one field, one array-backed tile (bbt/fv/grain),
+  // or one list (priorities/cleaningTasks), so merging per-key here is the
+  // direct equivalent of merging per-section there. NOTE: "date" is just an
+  // ordinary content field on this site (the shift date shown in the form),
+  // not a record identity key the way it is on the day-keyed sibling sites
+  // — so it's merged like everything else here, not force-kept from local.
+  const MERGE_FIELDS = [
+    "date", "from", "comments",
+    "priorities", "bbt", "fv", "grain", "cleaningTasks",
+    "gbl70", "gbl300", "gbl500",
+    "ypp1", "ypp2", "yline300", "yline500",
+    "glycolSupply", "glycolReturn",
+    "pmMain", "doReading", "sensory", "rlu", "co2", "amReading", "pmEvening",
+    "twLevel", "twPh", "wasteFv13", "wyt1", "wyt2", "wyt3",
+  ];
+
+  // Captured once, right now, before any saved draft or remote record has
+  // been applied — so this is exactly what a pristine, untouched form looks
+  // like (8 blank BBT rows, 3 blank grain tasks, empty strings/arrays
+  // everywhere else). A baseline or remote record can be missing keys
+  // entirely (a fresh deploy with nothing saved yet; an older record from
+  // before a field existed), and without this, a missing key compares as
+  // `undefined` against a real local value like `""` — which is *always*
+  // unequal, so every untouched field would falsely look "changed". Filling
+  // gaps with the actual untouched-form shape instead of a generic `{}`
+  // fixes that, and doing it by calling collectState() itself (rather than
+  // hand-duplicating these defaults) means it can't drift out of sync with
+  // the real form.
+  const EMPTY_STATE = collectState();
+
+  function sanitizeState(raw) {
+    return { ...EMPTY_STATE, ...(raw || {}) };
+  }
+
+  function setBaseline(state) {
+    baseline = state ? JSON.parse(JSON.stringify(state)) : null;
+  }
+
+  // Three-way merge: for each field, if THIS device changed it since the
+  // baseline, local wins; otherwise take whatever the server currently has
+  // (someone else's edit we haven't seen, to a field we didn't touch — so
+  // there's no real conflict). Falls back to local when a field is missing
+  // from remote entirely (e.g. an older record from before a field existed).
+  function mergeStateThreeWay(baselineState, localState, remoteState) {
+    const base = sanitizeState(baselineState);
+    const merged = {};
+    MERGE_FIELDS.forEach((key) => {
+      const localChanged = JSON.stringify(localState[key]) !== JSON.stringify(base[key]);
+      merged[key] = localChanged ? localState[key] : (key in remoteState ? remoteState[key] : localState[key]);
+    });
+    merged.updatedAt = Date.now();
+    return merged;
+  }
 
   function setSyncStatus(text) {
     if (syncStatus) syncStatus.textContent = text;
@@ -324,19 +388,40 @@
     try { return JSON.parse(raw); } catch (e) { return null; }
   }
 
-  async function pushToServer(state) {
+  async function pushToServer(localState) {
     setSyncStatus("Syncing…");
     try {
+      // Check whether the server has moved since our last confirmed
+      // agreement before blindly overwriting it — if it has, merge instead,
+      // so a section we never touched (edited by someone else in the
+      // meantime) doesn't get wiped out just because we saved last.
+      const priorBaseline = baseline;
+      const remoteCheck = await pullFromServer();
+
+      let toSend = localState;
+      if (remoteCheck) {
+        const remoteMoved = !priorBaseline || (remoteCheck.updatedAt || 0) > (priorBaseline.updatedAt || 0);
+        if (remoteMoved) {
+          toSend = mergeStateThreeWay(priorBaseline, localState, remoteCheck);
+          applyState(toSend);
+          saveLocal(toSend);
+          lastKnownUpdatedAt = toSend.updatedAt;
+        }
+      }
+
       const res = await fetch("/api/sync", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(state),
+        body: JSON.stringify(toSend),
       });
       if (!res.ok) throw new Error("sync failed");
       pendingPush = null;
+      setBaseline(toSend); // this is now what we and the server agree on
+      saveLocal(toSend);
+      lastKnownUpdatedAt = toSend.updatedAt;
       setSyncStatus("Synced");
     } catch (e) {
-      pendingPush = state; // retry next chance we get (poll, focus, or back online)
+      pendingPush = true; // retry next chance we get (poll, focus, or back online) — with fresh state, not this stale snapshot
       setSyncStatus("Offline — saved on this device");
     }
   }
@@ -441,24 +526,35 @@
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   }
 
-  const pushDebounced = debounce((state) => pushToServer(state), 1000);
+  // Deliberately takes no arguments and re-collects state itself at the
+  // moment it actually fires, rather than closing over a snapshot from
+  // whenever it was *scheduled*. Otherwise a change 1000ms ago (even a
+  // stray one — e.g. a field blurring because a confirm() dialog just
+  // stole focus) could still be sitting in the queue and clobber a more
+  // recent direct write (like Clear sheet's own immediate push) that
+  // happened to land in between. Collecting fresh at fire-time means
+  // whatever's actually on screen by then is what gets sent, however the
+  // push was triggered.
+  const pushDebounced = debounce(() => pushToServer(collectStateWithTimestamp()), 1000);
 
   function onFormChange() {
     lastLocalEditAt = Date.now();
-    const state = saveDraft();
-    pushDebounced(state);
+    saveDraft();
+    pushDebounced();
   }
 
   document.body.addEventListener("input", debounce(onFormChange, 400));
   document.body.addEventListener("change", onFormChange);
 
-  window.addEventListener("online", () => { if (pendingPush) pushToServer(pendingPush); });
+  window.addEventListener("online", () => { if (pendingPush) pushToServer(collectStateWithTimestamp()); });
 
   async function maybePullRemote() {
     if (Date.now() - lastLocalEditAt < 5000) return; // don't yank the field mid-typing
     if (overlay.classList.contains("open")) return;  // don't disrupt email review
     const remote = await pullFromServer();
-    if (remote && (remote.updatedAt || 0) > lastKnownUpdatedAt) {
+    if (!remote) return;
+    setBaseline(remote); // this is what we now know the server holds
+    if ((remote.updatedAt || 0) > lastKnownUpdatedAt) {
       applyState(remote);
       saveLocal(remote);
       setSyncStatus("Updated from another device");
@@ -476,9 +572,16 @@
 
   (async () => {
     const remote = await pullFromServer();
-    if (remote && (!localDraft || (remote.updatedAt || 0) > (localDraft.updatedAt || 0))) {
-      applyState(remote);
-      saveLocal(remote);
+    if (remote) {
+      if (!localDraft || (remote.updatedAt || 0) > (localDraft.updatedAt || 0)) {
+        applyState(remote);
+        saveLocal(remote);
+      }
+      // Either way, this is what the server currently holds — the baseline
+      // for future merges. If we kept local instead (it was newer), local's
+      // not-yet-pushed edits are correctly "changes since this baseline"
+      // once they do get pushed.
+      setBaseline(remote);
     }
     setSyncStatus("Synced");
     setInterval(maybePullRemote, 20000);
