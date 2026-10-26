@@ -307,3 +307,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .card{ padding: 18px 16px 20px; }
   .fv-grid{ grid-template-columns: repeat(auto-fill, minmax(128px,1fr)); }
 }
+
+.util-note{ margin:2px 0 0; font-size:12.5px; color:#d32f2f; }
