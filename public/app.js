@@ -238,16 +238,16 @@
     slot.innerHTML = `
       <label class="table-checkline spec-check">
         <input type="checkbox" data-check="${key}">
-        <span>in spec or escalated to ${esc(who)}</span>
+        <span>In spec or escalated to ${esc(who)}</span>
       </label>`;
   });
   const SPEC_CHECK_KEYS = SPEC_CHECKS.map((c) => c[1]);
   const SPEC_CHECK_LABELS = {
-    glycolSpecOk: "in spec or escalated to Maintenance Team",
-    dawSpecOk: "in spec or escalated to Team Leaders",
-    co2SpecOk: "in spec or escalated to Planning Team",
-    twSpecOk: "in spec or escalated to Maintenance Team",
-    wasteSpecOk: "in spec or escalated to Team Leaders or Coastal Feeds",
+    glycolSpecOk: "In spec or escalated to Maintenance Team",
+    dawSpecOk: "In spec or escalated to Team Leaders",
+    co2SpecOk: "In spec or escalated to Planning Team",
+    twSpecOk: "In spec or escalated to Maintenance Team",
+    wasteSpecOk: "In spec or escalated to Team Leaders or Coastal Feeds",
   };
 
   // Out-of-spec rules. Blank / non-numeric = not flagged.
