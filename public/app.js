@@ -254,7 +254,7 @@
   const num = (v) => { const n = parseFloat(String(v ?? "").trim()); return Number.isNaN(n) ? null : n; };
   const numRule = (fn) => (v) => { const n = num(v); return n !== null && fn(n); };
   const SPEC_RULES = {
-    glycolSupply: numRule((n) => n > 4),
+    glycolSupply: numRule((n) => n >= 4),
     pmMain: numRule((n) => n < 80),
     doReading: numRule((n) => n >= 30),
     sensory: (v) => /fail/i.test(String(v ?? "")),
