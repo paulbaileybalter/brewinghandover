@@ -20,11 +20,18 @@
     "run_worker_first": true
   },
 
+  // Shared draft storage. No "id" on purpose: with wrangler 4.45+ the first
+  // deploy (including Workers Builds) automatically creates a KV namespace
+  // for this binding and links it — nothing to set up by hand.
+  "kv_namespaces": [
+    { "binding": "HANDOVER_KV" }
+  ],
+
   "observability": {
     "enabled": true
   }
 
-  // Secrets (SITE_PASSWORD, SESSION_SECRET, JSONBIN_BIN_ID, JSONBIN_API_KEY)
+  // Secrets (SITE_PASSWORD, SESSION_SECRET)
   // are NOT defined here — they're set as encrypted Secrets in the
   // Cloudflare dashboard (Worker → Settings → Variables and Secrets) or via
   // `wrangler secret put <NAME>`, never committed to the repo.

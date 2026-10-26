@@ -351,8 +351,8 @@
 
   /* -----------------------------------------------------------
      7. Persist state — local draft (this browser) + cloud sync
-     (via the Worker's /api/sync endpoint, which proxies JSONBin
-     server-side; the browser never sees the JSONBin API key)
+     (via the Worker's /api/sync endpoint, which stores it in Cloudflare KV;
+     all server-side)
   ----------------------------------------------------------- */
   const syncStatus = document.getElementById("syncStatus");
   let lastLocalEditAt = 0;      // last time the person typed/changed something

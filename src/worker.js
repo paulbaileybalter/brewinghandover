@@ -5,15 +5,17 @@
  *   1. Password-gate every route behind a signed session cookie
  *      (HMAC-SHA256, HttpOnly, Secure, SameSite=Lax). Checked before
  *      anything else is served — static files and API routes alike.
- *   2. Proxy cloud-sync reads/writes to JSONBin.io server-side, so the
- *      real JSONBin API key never reaches the browser.
+ *   2. Serve cloud-sync reads/writes (/api/sync) from Cloudflare KV, so the
+ *      shared draft lives inside Cloudflare — no third-party service or
+ *      API key involved.
  *   3. Fall through to the static site in public/ for everything else.
  *
  * Required secrets (Worker Settings → Variables and Secrets, type "Secret"):
  *   SITE_PASSWORD    the shared password staff use to log in
  *   SESSION_SECRET    long random string used to sign session cookies
- *   JSONBIN_BIN_ID    the JSONBin.io bin that stores the shared draft
- *   JSONBIN_API_KEY  JSONBin.io "X-Master-Key"
+ *
+ * Required binding (wrangler.jsonc → kv_namespaces):
+ *   HANDOVER_KV      the KV namespace that stores the shared draft
  *
  * See README.md for how to generate/obtain each of these and where to
  * set them.
@@ -21,7 +23,7 @@
 
 const COOKIE_NAME = "session";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const JSONBIN_BASE = "https://api.jsonbin.io/v3/b";
+const SYNC_KEY = "handover-state"; // the one KV key holding the shared sheet
 
 export default {
   async fetch(request, env, ctx) {
@@ -170,33 +172,22 @@ function getCookie(request, name) {
 }
 
 /* =====================================================================
-   Cloud sync — proxies JSONBin.io so the API key stays server-side
+   Cloud sync — one JSON record in Cloudflare KV
 ===================================================================== */
 
 const MAX_SYNC_BODY_BYTES = 300 * 1024; // 300KB is far more than this sheet needs
 
 async function handleSync(request, env) {
-  if (!env.JSONBIN_BIN_ID || !env.JSONBIN_API_KEY) {
+  if (!env.HANDOVER_KV) {
     return jsonResponse({ error: "Sync isn't configured on the server yet." }, 501);
   }
 
   if (request.method === "GET") {
     try {
-      const upstream = await fetch(`${JSONBIN_BASE}/${env.JSONBIN_BIN_ID}/latest`, {
-        headers: {
-          "X-Master-Key": env.JSONBIN_API_KEY,
-          "X-Bin-Meta": "false",
-        },
-      });
-      if (!upstream.ok) {
-        // Most commonly: bin has no data yet. Treat as "nothing to sync".
-        return jsonResponse({}, 200);
-      }
-      const data = await upstream.json().catch(() => ({}));
-      return jsonResponse(data, 200);
+      const data = await env.HANDOVER_KV.get(SYNC_KEY, { type: "json" });
+      // Nothing saved yet → "nothing to sync"; client uses its local draft.
+      return jsonResponse(data && typeof data === "object" ? data : {}, 200);
     } catch (e) {
-      // Upstream unreachable — don't break the page over it, just report
-      // "nothing to sync" so the client falls back to its local draft.
       return jsonResponse({}, 200);
     }
   }
@@ -212,24 +203,15 @@ async function handleSync(request, env) {
     } catch (e) {
       return jsonResponse({ error: "Body must be valid JSON" }, 400);
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return jsonResponse({ error: "Body must be a JSON object" }, 400);
+    }
 
     try {
-      const upstream = await fetch(`${JSONBIN_BASE}/${env.JSONBIN_BIN_ID}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Master-Key": env.JSONBIN_API_KEY,
-          "X-Bin-Versioning": "false",
-        },
-        body: JSON.stringify(parsed),
-      });
-
-      if (!upstream.ok) {
-        return jsonResponse({ error: "Upstream sync store rejected the write" }, 502);
-      }
+      await env.HANDOVER_KV.put(SYNC_KEY, JSON.stringify(parsed));
       return jsonResponse({ ok: true }, 200);
     } catch (e) {
-      return jsonResponse({ error: "Upstream sync store unreachable" }, 502);
+      return jsonResponse({ error: "Sync store unavailable" }, 502);
     }
   }
 

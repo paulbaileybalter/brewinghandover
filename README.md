@@ -10,7 +10,7 @@ sees the same shared draft, kept in sync across devices.
 ```
 wrangler.jsonc     Worker + static-assets config (deploy settings)
 package.json       wrangler as the only dependency
-src/worker.js      the entire server: auth gate → sync proxy → static files
+src/worker.js      the entire server: auth gate → KV sync → static files
 public/            the site itself (unchanged from before)
   index.html
   style.css
@@ -27,9 +27,10 @@ One Worker, `src/worker.js`, handles every request in this order:
    API calls) instead. Sessions are `HttpOnly; Secure; SameSite=Lax` and
    signed with HMAC-SHA256, so nothing about them can be forged or read by
    JavaScript in the browser.
-2. **Sync proxy.** `/api/sync` (`GET` to read, `PUT` to write) proxies to a
-   private JSONBin.io bin. The real JSONBin API key lives only as a Worker
-   secret — it's never sent to the browser, never appears in page source.
+2. **Sync.** `/api/sync` (`GET` to read, `PUT` to write) reads and writes a
+   single record in a Cloudflare KV namespace (binding `HANDOVER_KV`). It
+   sits behind the same login, and there's no third-party service or API
+   key involved.
 3. **Static files.** Anything else falls through to the site in `public/`.
 
 The one non-obvious setting: `wrangler.jsonc` has `"run_worker_first": true`
@@ -43,6 +44,9 @@ auth gate first, static files included.
 - Every field change is saved to the browser's `localStorage` immediately
   (so a refresh never loses work) and pushed to `/api/sync` a second or so
   later.
+- KV is eventually consistent: a save can take up to about a minute to show
+  on a device in a different Cloudflare location (same-location reads see it
+  straight away). The merge logic below is what keeps that from losing edits.
 - On load, and every ~20 seconds afterwards (plus whenever the tab regains
   focus), the page pulls the latest version from the server.
 - Saving uses a **three-way merge**, not a blind overwrite: each device
@@ -75,17 +79,12 @@ reachable from any device without emailing a file around.
 
 ## One-time setup
 
-### 1. Create the JSONBin.io bin
+### 1. KV namespace — automatic
 
-1. Sign up at [jsonbin.io](https://jsonbin.io) (free tier is plenty for this).
-2. Go to **API Keys** and copy your **X-Master-Key** — this is
-   `JSONBIN_API_KEY`.
-3. Create a new bin. JSONBin's editor won't accept a truly empty `{}` (it
-   errors with "Bin cannot be blank"), so give it a small placeholder
-   instead, e.g. `{"note": "handover sync bin"}` — the app will overwrite
-   this the first time anyone saves the sheet, so its contents don't
-   matter. Copy the bin's **Bin ID** from
-   the bin's page — this is `JSONBIN_BIN_ID`.
+Nothing to do. `wrangler.jsonc` declares the `HANDOVER_KV` binding without an
+ID, and wrangler (4.45+, pinned in `package.json`) creates the namespace and
+links it on the first deploy. Workers Builds does this too. To see or inspect
+it afterwards: dashboard → **Storage & Databases → KV**.
 
 ### 2. Generate a session secret
 
@@ -120,18 +119,16 @@ script — this has to go through Cloudflare's Git integration:
 4. Deploy. Cloudflare will build and deploy automatically on every push to
    your main branch from now on.
 
-### 5. Set the four secrets
+### 5. Set the two secrets
 
 In the Cloudflare dashboard, on this Worker: **Settings → Variables and
-Secrets → Add**. Add all four as type **Secret** (not Text, so they're
+Secrets → Add**. Add both as type **Secret** (not Text, so they're
 encrypted and never shown again in the dashboard):
 
 | Name              | Value                                          |
 |-------------------|-------------------------------------------------|
 | `SITE_PASSWORD`   | the password your team will type in to log in  |
 | `SESSION_SECRET`  | the random string from step 2                   |
-| `JSONBIN_BIN_ID`  | from step 1                                     |
-| `JSONBIN_API_KEY` | your JSONBin X-Master-Key, from step 1          |
 
 After adding/changing secrets, redeploy (or it'll pick them up on the next
 deploy) for them to take effect.
@@ -152,7 +149,7 @@ npm run dev
 ```
 
 `wrangler dev` runs the whole thing locally, including the auth gate and
-the JSONBin proxy, at `http://localhost:8787`. `.dev.vars` is gitignored —
+a local KV store, at `http://localhost:8787`. `.dev.vars` is gitignored —
 it's your local stand-in for the dashboard secrets.
 
 ```
