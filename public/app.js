@@ -261,12 +261,17 @@
     rlu: numRule((n) => n > 10),
     pmEvening: numRule((n) => n < 20),
     twLevel: numRule((n) => n > 70),
-    wasteFv13: numRule((n) => n > 80),
-    wyt1: numRule((n) => n > 80),
-    wyt2: numRule((n) => n > 80),
-    wyt3: numRule((n) => n > 80),
+    twPh: numRule((n) => n < 6 || n > 9.5),
+    // Waste yeast: FV13 has no limit. WYT1-3 only go red when ALL THREE are above 80.
+    wyt1: (v, get) => wytAllHigh(get),
+    wyt2: (v, get) => wytAllHigh(get),
+    wyt3: (v, get) => wytAllHigh(get),
   };
-  const isOutOfSpec = (key, v) => !!(SPEC_RULES[key] && SPEC_RULES[key](v));
+  const wytAllHigh = (get) => ["wyt1", "wyt2", "wyt3"].every((k) => { const n = num(get(k)); return n !== null && n > 80; });
+  const domGet = (k) => { const el = document.querySelector(`[data-key="${k}"]`); return el ? el.value : ""; };
+  // `get` reads a field's value by key — from the form by default, or from a
+  // saved state object when building the email.
+  const isOutOfSpec = (key, v, get = domGet) => !!(SPEC_RULES[key] && SPEC_RULES[key](v, get));
   function updateSpecFlags() {
     Object.keys(SPEC_RULES).forEach((k) => {
       const el = document.querySelector(`[data-key="${k}"]`);
@@ -760,7 +765,7 @@
     }
 
     const miniRow = (label, val, key) => {
-      const bad = key && isOutOfSpec(key, val);
+      const bad = key && isOutOfSpec(key, val, (k) => s[k]);
       return `<tr>
         <td style="padding:5px 0;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#55585F;width:44%;">${esc(label)}</td>
         <td style="padding:5px 0;font-family:'Courier New',monospace;font-size:13px;color:${bad ? "#D32F2F" : "#14161A"};font-weight:bold;">${esc(val) || "–"}</td>
@@ -809,8 +814,8 @@
       utilityTile("Glycol", rows([["Main supply (kPa)", s.glycolSupply, "glycolSupply"], ["Main return (kPa)", s.glycolReturn]], "glycolSpecOk")),
       utilityTile("DAW", rows([["% PM", s.pmMain, "pmMain"], ["D.O", s.doReading, "doReading"], ["Sensory", s.sensory, "sensory"], ["RLU", s.rlu, "rlu"], ["CO2", s.co2]], "dawSpecOk")),
       utilityTile("CO2", rows([["% AM", s.amReading], ["% PM", s.pmEvening, "pmEvening"]], "co2SpecOk")),
-      utilityTile("6-10 Trade Waste", rows([["Level", s.twLevel, "twLevel"], ["pH", s.twPh]], "twSpecOk")),
-      utilityTile("Waste yeast", rows([["FV13", s.wasteFv13, "wasteFv13"], ["WYT1", s.wyt1, "wyt1"], ["WYT2", s.wyt2, "wyt2"], ["WYT3", s.wyt3, "wyt3"]], "wasteSpecOk")),
+      utilityTile("6-10 Trade Waste", rows([["Level", s.twLevel, "twLevel"], ["pH", s.twPh, "twPh"]], "twSpecOk")),
+      utilityTile("Waste yeast", rows([["FV13", s.wasteFv13], ["WYT1", s.wyt1, "wyt1"], ["WYT2", s.wyt2, "wyt2"], ["WYT3", s.wyt3, "wyt3"]], "wasteSpecOk")),
     ].join("");
 
 
@@ -930,7 +935,7 @@
     });
     lines.push("");
     lines.push(`UTILITIES`);
-    const pv = (k, v) => (v || "–") + (isOutOfSpec(k, v) ? " (OUT OF SPEC)" : "");
+    const pv = (k, v) => (v || "–") + (isOutOfSpec(k, v, (x) => s[x]) ? " (OUT OF SPEC)" : "");
     const pc = (k) => `   [${s[k] ? "x" : " "}] ${SPEC_CHECK_LABELS[k]}`;
     lines.push(`  Glycol — main supply: ${pv("glycolSupply", s.glycolSupply)}   main return: ${s.glycolReturn || "–"}`);
     lines.push(pc("glycolSpecOk"));
@@ -938,9 +943,9 @@
     lines.push(pc("dawSpecOk"));
     lines.push(`  CO2 — %AM: ${s.amReading || "–"}   %PM: ${pv("pmEvening", s.pmEvening)}`);
     lines.push(pc("co2SpecOk"));
-    lines.push(`  6-10 Trade Waste — Level: ${pv("twLevel", s.twLevel)}   pH: ${s.twPh || "–"}`);
+    lines.push(`  6-10 Trade Waste — Level: ${pv("twLevel", s.twLevel)}   pH: ${pv("twPh", s.twPh)}`);
     lines.push(pc("twSpecOk"));
-    lines.push(`  Waste yeast — FV13: ${pv("wasteFv13", s.wasteFv13)}   WYT1: ${pv("wyt1", s.wyt1)}   WYT2: ${pv("wyt2", s.wyt2)}   WYT3: ${pv("wyt3", s.wyt3)}`);
+    lines.push(`  Waste yeast — FV13: ${s.wasteFv13 || "–"}   WYT1: ${pv("wyt1", s.wyt1)}   WYT2: ${pv("wyt2", s.wyt2)}   WYT3: ${pv("wyt3", s.wyt3)}`);
     lines.push(pc("wasteSpecOk"));
     lines.push("");
     lines.push(`CLEANING COMPLETED`);
