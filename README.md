@@ -44,20 +44,34 @@ auth gate first, static files included.
   (so a refresh never loses work) and pushed to `/api/sync` a second or so
   later.
 - On load, and every ~20 seconds afterwards (plus whenever the tab regains
-  focus), the page pulls the latest version from the server. Whichever
-  copy — local or remote — has the newer timestamp wins.
+  focus), the page pulls the latest version from the server.
+- Saving uses a **three-way merge**, not a blind overwrite: each device
+  remembers the last state it and the server agreed on (its "baseline").
+  When pushing, if the server has moved since that baseline, the two are
+  merged field-by-field — a field this device changed since baseline wins
+  locally; a field it didn't touch takes whatever the server currently has.
+  This means two people editing *different* sections around the same time
+  (say, one filling in Brite Tank Status while another logs a comment)
+  both keep their changes, instead of whoever saves last wiping out
+  whatever the other one just wrote. Editing the exact same field at the
+  same time still resolves last-write-wins for that one field — there's no
+  way to merge two different answers to the same question.
 - If someone's mid-keystroke, or has the "Build handover email" preview
   open, incoming updates are held back so they don't get overwritten or
   interrupted.
 - If the network's down, edits keep saving locally and retry the push once
   you're back online — nothing is lost, it just doesn't sync until then.
-- **Clear sheet** clears the shared copy too, for everyone, so use it once
-  a shift's handover has actually been sent.
+- **Clear sheet** clears the shared copy too (except Brite Tank Status,
+  Green beer lines, and Yeast propagation & lines, which don't reset every
+  shift), for everyone, so use it once a shift's handover has actually
+  been sent. It goes through the same merge-aware save path, so it won't
+  stomp a concurrent edit to one of those three preserved tiles either.
 
-This is deliberately simple last-write-wins sync, not real-time
-collaborative editing — it's built for "one shift lead fills this in,"
-same as the spreadsheet, just reachable from any device without emailing
-a file around.
+This is deliberately simple field-level merge sync (last-write-wins only
+within a single field), not real-time collaborative editing — it's built
+for "one shift lead fills this in, maybe with someone else updating a
+different tile at the same time," same spirit as the spreadsheet, just
+reachable from any device without emailing a file around.
 
 ## One-time setup
 

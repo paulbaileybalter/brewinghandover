@@ -224,6 +224,58 @@
   ]);
 
   /* -----------------------------------------------------------
+     Utilities: "in spec or escalated" checkboxes + out-of-spec rules
+  ----------------------------------------------------------- */
+  const SPEC_CHECKS = [
+    ["glycolGrid", "glycolSpecOk", "Maintenance Team"],
+    ["readingsGrid", "dawSpecOk", "Team Leaders"],
+    ["co2Grid", "co2SpecOk", "Planning Team"],
+    ["twGrid", "twSpecOk", "Maintenance Team"],
+    ["wasteGrid", "wasteSpecOk", "Team Leaders or Coastal Feeds"],
+  ];
+  SPEC_CHECKS.forEach(([gridId, key, who]) => {
+    const slot = document.getElementById(gridId + "Check");
+    slot.innerHTML = `
+      <label class="table-checkline spec-check">
+        <input type="checkbox" data-check="${key}">
+        <span>in spec or escalated to ${esc(who)}</span>
+      </label>`;
+  });
+  const SPEC_CHECK_KEYS = SPEC_CHECKS.map((c) => c[1]);
+  const SPEC_CHECK_LABELS = {
+    glycolSpecOk: "in spec or escalated to Maintenance Team",
+    dawSpecOk: "in spec or escalated to Team Leaders",
+    co2SpecOk: "in spec or escalated to Planning Team",
+    twSpecOk: "in spec or escalated to Maintenance Team",
+    wasteSpecOk: "in spec or escalated to Team Leaders or Coastal Feeds",
+  };
+
+  // Out-of-spec rules. Blank / non-numeric = not flagged.
+  const num = (v) => { const n = parseFloat(String(v ?? "").trim()); return Number.isNaN(n) ? null : n; };
+  const numRule = (fn) => (v) => { const n = num(v); return n !== null && fn(n); };
+  const SPEC_RULES = {
+    glycolSupply: numRule((n) => n > 4),
+    pmMain: numRule((n) => n < 80),
+    doReading: numRule((n) => n >= 30),
+    sensory: (v) => /fail/i.test(String(v ?? "")),
+    rlu: numRule((n) => n > 10),
+    pmEvening: numRule((n) => n < 20),
+    twLevel: numRule((n) => n > 70),
+    wasteFv13: numRule((n) => n > 80),
+    wyt1: numRule((n) => n > 80),
+    wyt2: numRule((n) => n > 80),
+    wyt3: numRule((n) => n > 80),
+  };
+  const isOutOfSpec = (key, v) => !!(SPEC_RULES[key] && SPEC_RULES[key](v));
+  function updateSpecFlags() {
+    Object.keys(SPEC_RULES).forEach((k) => {
+      const el = document.querySelector(`[data-key="${k}"]`);
+      if (el) el.classList.toggle("out-of-spec", isOutOfSpec(k, el.value));
+    });
+  }
+  document.body.addEventListener("input", updateSpecFlags);
+
+  /* -----------------------------------------------------------
      5. Default date (priority row seeding happens at Startup below,
      once we know whether a local draft or remote sync state exists)
   ----------------------------------------------------------- */
@@ -279,6 +331,10 @@
     ];
     const misc = {};
     keys.forEach((k) => (misc[k] = getKey(k)));
+    SPEC_CHECK_KEYS.forEach((k) => {
+      const el = document.querySelector(`[data-check="${k}"]`);
+      misc[k] = !!(el && el.checked);
+    });
 
     return {
       date: metaDate.value,
@@ -327,6 +383,7 @@
     "glycolSupply", "glycolReturn",
     "pmMain", "doReading", "sensory", "rlu", "co2", "amReading", "pmEvening",
     "twLevel", "twPh", "wasteFv13", "wyt1", "wyt2", "wyt3",
+    "glycolSpecOk", "dawSpecOk", "co2SpecOk", "twSpecOk", "wasteSpecOk",
   ];
 
   // Captured once, right now, before any saved draft or remote record has
@@ -512,6 +569,8 @@
       const el = document.querySelector(`[data-key="${k}"]`);
       if (el && typeof s[k] === "string") el.value = s[k];
     });
+    document.querySelectorAll("[data-check]").forEach((el) => (el.checked = !!s[el.dataset.check]));
+    updateSpecFlags();
   }
 
   function saveDraft() {
@@ -612,6 +671,7 @@
       if (el.closest(CLEAR_EXCLUDE_SELECTOR)) return;
       el.checked = false;
     });
+    updateSpecFlags();
     metaDate.value = new Date().toISOString().slice(0, 10);
     priorityStack.reset();
     priorityStack.addRow();
@@ -699,10 +759,18 @@
         </tr>`).join("");
     }
 
-    const miniRow = (label, val) => `<tr>
+    const miniRow = (label, val, key) => {
+      const bad = key && isOutOfSpec(key, val);
+      return `<tr>
         <td style="padding:5px 0;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#55585F;width:44%;">${esc(label)}</td>
-        <td style="padding:5px 0;font-family:'Courier New',monospace;font-size:13px;color:#14161A;font-weight:bold;">${esc(val) || "–"}</td>
+        <td style="padding:5px 0;font-family:'Courier New',monospace;font-size:13px;color:${bad ? "#D32F2F" : "#14161A"};font-weight:bold;">${esc(val) || "–"}</td>
       </tr>`;
+    };
+    const specRow = (key) => {
+      const ok = !!s[key];
+      const text = SPEC_CHECK_LABELS[key].charAt(0).toUpperCase() + SPEC_CHECK_LABELS[key].slice(1);
+      return `<tr><td colspan="2" style="padding:7px 0 2px;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;color:${ok ? "#0d7a58" : "#8a8d94"};">${ok ? "☑" : "☐"} ${esc(text)}</td></tr>`;
+    };
 
     const greenBeerRows = [
       ["70 Cellar", s.gbl70], ["300 Cellar", s.gbl300], ["500 Cellar", s.gbl500],
@@ -736,12 +804,13 @@
         </td></tr>
       </table>`;
 
+    const rows = (list, checkKey) => list.map(([l, v, k]) => miniRow(l, v, k)).join("") + specRow(checkKey);
     const utilities = [
-      utilityTile("Glycol", [["Main supply (kPa)", s.glycolSupply], ["Main return (kPa)", s.glycolReturn]].map(([l, v]) => miniRow(l, v)).join("")),
-      utilityTile("DAW", [["% PM", s.pmMain], ["D.O", s.doReading], ["Sensory", s.sensory], ["RLU", s.rlu], ["CO2", s.co2]].map(([l, v]) => miniRow(l, v)).join("")),
-      utilityTile("CO2", [["% AM", s.amReading], ["% PM", s.pmEvening]].map(([l, v]) => miniRow(l, v)).join("")),
-      utilityTile("6–10 TW", [["Level", s.twLevel], ["pH", s.twPh]].map(([l, v]) => miniRow(l, v)).join("")),
-      utilityTile("Waste yeast", [["FV13", s.wasteFv13], ["WYT1", s.wyt1], ["WYT2", s.wyt2], ["WYT3", s.wyt3]].map(([l, v]) => miniRow(l, v)).join("")),
+      utilityTile("Glycol", rows([["Main supply (kPa)", s.glycolSupply, "glycolSupply"], ["Main return (kPa)", s.glycolReturn]], "glycolSpecOk")),
+      utilityTile("DAW", rows([["% PM", s.pmMain, "pmMain"], ["D.O", s.doReading, "doReading"], ["Sensory", s.sensory, "sensory"], ["RLU", s.rlu, "rlu"], ["CO2", s.co2]], "dawSpecOk")),
+      utilityTile("CO2", rows([["% AM", s.amReading], ["% PM", s.pmEvening, "pmEvening"]], "co2SpecOk")),
+      utilityTile("6-10 Trade Waste", rows([["Level", s.twLevel, "twLevel"], ["pH", s.twPh]], "twSpecOk")),
+      utilityTile("Waste yeast", rows([["FV13", s.wasteFv13, "wasteFv13"], ["WYT1", s.wyt1, "wyt1"], ["WYT2", s.wyt2, "wyt2"], ["WYT3", s.wyt3, "wyt3"]], "wasteSpecOk")),
     ].join("");
 
 
@@ -861,11 +930,18 @@
     });
     lines.push("");
     lines.push(`UTILITIES`);
-    lines.push(`  Glycol — main supply: ${s.glycolSupply || "–"}   main return: ${s.glycolReturn || "–"}`);
-    lines.push(`  DAW — %PM: ${s.pmMain || "–"}   D.O: ${s.doReading || "–"}   Sensory: ${s.sensory || "–"}   RLU: ${s.rlu || "–"}   CO2: ${s.co2 || "–"}`);
-    lines.push(`  CO2 — %AM: ${s.amReading || "–"}   %PM: ${s.pmEvening || "–"}`);
-    lines.push(`  6-10 TW — Level: ${s.twLevel || "–"}   pH: ${s.twPh || "–"}`);
-    lines.push(`  Waste yeast — FV13: ${s.wasteFv13 || "–"}   WYT1: ${s.wyt1 || "–"}   WYT2: ${s.wyt2 || "–"}   WYT3: ${s.wyt3 || "–"}`);
+    const pv = (k, v) => (v || "–") + (isOutOfSpec(k, v) ? " (OUT OF SPEC)" : "");
+    const pc = (k) => `   [${s[k] ? "x" : " "}] ${SPEC_CHECK_LABELS[k]}`;
+    lines.push(`  Glycol — main supply: ${pv("glycolSupply", s.glycolSupply)}   main return: ${s.glycolReturn || "–"}`);
+    lines.push(pc("glycolSpecOk"));
+    lines.push(`  DAW — %PM: ${pv("pmMain", s.pmMain)}   D.O: ${pv("doReading", s.doReading)}   Sensory: ${pv("sensory", s.sensory)}   RLU: ${pv("rlu", s.rlu)}   CO2: ${s.co2 || "–"}`);
+    lines.push(pc("dawSpecOk"));
+    lines.push(`  CO2 — %AM: ${s.amReading || "–"}   %PM: ${pv("pmEvening", s.pmEvening)}`);
+    lines.push(pc("co2SpecOk"));
+    lines.push(`  6-10 Trade Waste — Level: ${pv("twLevel", s.twLevel)}   pH: ${s.twPh || "–"}`);
+    lines.push(pc("twSpecOk"));
+    lines.push(`  Waste yeast — FV13: ${pv("wasteFv13", s.wasteFv13)}   WYT1: ${pv("wyt1", s.wyt1)}   WYT2: ${pv("wyt2", s.wyt2)}   WYT3: ${pv("wyt3", s.wyt3)}`);
+    lines.push(pc("wasteSpecOk"));
     lines.push("");
     lines.push(`CLEANING COMPLETED`);
     if (s.cleaningTasks && s.cleaningTasks.length) s.cleaningTasks.forEach((t) => lines.push(`  ✓ ${t}`));
